@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Motor de Conversión de Bases</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: #f4f5f7;
+    color: #1a1a1a;
+    max-width: 520px;
+    margin: 40px auto;
+    padding: 0 16px;
+  }
+  h1 { font-size: 1.3rem; margin-bottom: 4px; }
+  p.subtitle { color: #666; margin-top: 0; font-size: 0.9rem; }
+  section {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  h2 { font-size: 1rem; margin: 0 0 12px 0; }
+  label { display: block; font-size: 0.85rem; margin: 10px 0 4px; }
+  input, select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    font-family: inherit;
+  }
+  input[readonly] { background: #f0f0f0; font-family: monospace; }
+  button {
+    margin-top: 14px;
+    width: 100%;
+    padding: 10px;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  button:hover { background: #1d4ed8; }
+  .error {
+    color: #b91c1c;
+    background: #fee2e2;
+    border: 1px solid #fca5a5;
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    margin-top: 10px;
+    display: none;
+  }
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; }
+  footer { text-align: center; color: #999; font-size: 0.75rem; margin: 24px 0; }
+</style>
+</head>
+<body>
+
+<h1>Motor de Conversión de Bases y ALU</h1>
+<p class="subtitle">Electrónica Digital · Conversión manual (sin funciones nativas de parseo)</p>
+
+<section>
+  <h2>1. Entrada de datos</h2>
+  <label for="numberInput">Número a convertir</label>
+  <input type="text" id="numberInput" placeholder="Ej: 1010, FF, 17, 255">
+
+  <div class="row">
+    <div>
+      <label for="sourceBase">Base de origen</label>
+      <select id="sourceBase">
+        <option value="2">Binario</option>
+        <option value="8">Octal</option>
+        <option value="10" selected>Decimal</option>
+        <option value="16">Hexadecimal</option>
+      </select>
+    </div>
+    <div>
+      <label for="wordSize">Tamaño de palabra</label>
+      <select id="wordSize">
+        <option value="8" selected>8 bits (Byte)</option>
+        <option value="16">16 bits (Word)</option>
+        <option value="32">32 bits (DWord)</option>
+        <option value="64">64 bits (QWord)</option>
+      </select>
+    </div>
+  </div>
+
+  <button onclick="convert()">Convertir</button>
+  <div class="error" id="convertError"></div>
+</section>
+
+<section>
+  <h2>2. Panel de registros (salida multibase)</h2>
+  <label>Binario</label>
+  <input type="text" id="outBinary" readonly>
+  <label>Octal</label>
+  <input type="text" id="outOctal" readonly>
+  <label>Decimal</label>
+  <input type="text" id="outDecimal" readonly>
+  <label>Hexadecimal</label>
+  <input type="text" id="outHex" readonly>
+</section>
+
+<section>
+  <h2>3. ALU · Operaciones lógicas bit a bit</h2>
+  <div class="row">
+    <div>
+      <label for="bin1">Binario A</label>
+      <input type="text" id="bin1" placeholder="1010">
+    </div>
+    <div>
+      <label for="bin2">Binario B</label>
+      <input type="text" id="bin2" placeholder="1100">
+    </div>
+  </div>
+  <label for="aluOp">Operación</label>
+  <select id="aluOp">
+    <option value="AND">AND</option>
+    <option value="OR">OR</option>
+    <option value="XOR">XOR</option>
+  </select>
+  <button onclick="runAlu()">Calcular</button>
+  <div class="error" id="aluError"></div>
+  <label>Resultado</label>
+  <input type="text" id="aluResult" readonly>
+</section>
+
+<footer>CUL · Ingeniería de Sistemas · Electrónica Digital</footer>
+
+<script>
+async function convert() {
+  const number = document.getElementById('numberInput').value;
+  const source_base = parseInt(document.getElementById('sourceBase').value);
+  const word_size = parseInt(document.getElementById('wordSize').value);
+  const errorBox = document.getElementById('convertError');
+  errorBox.style.display = 'none';
+
+  ['outBinary','outOctal','outDecimal','outHex'].forEach(id => document.getElementById(id).value = '');
+
+  try {
+    const res = await fetch('/api/convert', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ action: 'convert', number, source_base, word_size })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error desconocido');
+
+    document.getElementById('outBinary').value = data.binary;
+    document.getElementById('outOctal').value = data.octal;
+    document.getElementById('outDecimal').value = data.decimal;
+    document.getElementById('outHex').value = data.hexadecimal;
+
+    // precargar el binario resultante en el campo A de la ALU
+    document.getElementById('bin1').value = data.binary;
+  } catch (e) {
+    errorBox.textContent = e.message;
+    errorBox.style.display = 'block';
+  }
+}
+
+async function runAlu() {
+  const bin1 = document.getElementById('bin1').value;
+  const bin2 = document.getElementById('bin2').value;
+  const operation = document.getElementById('aluOp').value;
+  const word_size = parseInt(document.getElementById('wordSize').value);
+  const errorBox = document.getElementById('aluError');
+  errorBox.style.display = 'none';
+  document.getElementById('aluResult').value = '';
+
+  try {
+    const res = await fetch('/api/convert', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ action: 'alu', bin1, bin2, operation, word_size })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error desconocido');
+    document.getElementById('aluResult').value = data.result;
+  } catch (e) {
+    errorBox.textContent = e.message;
+    errorBox.style.display = 'block';
+  }
+}
+</script>
+
+</body>
+</html>
